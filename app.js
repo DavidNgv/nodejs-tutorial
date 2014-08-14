@@ -10,6 +10,11 @@ var users = require('./routes/users');
 
 var app = express();
 
+//Redis
+var redis = require('redis');
+var db = redis.createClient();
+
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -20,6 +25,32 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+
+// The middleware for tracking online users.
+// Here we'll use sorted sets so that we can query redis for the users online within the last N milliseconds.
+// We do this by passing a timestamp as the member's "score".
+// Note that here we're using the User-Agent string in place of what would normally be a user id.
+app.use(function(req, res, next){
+    var ua = req.headers['user-agent'];
+    db.zadd('online', Date.now(), ua, next);
+});
+
+/*
+* This next middleware is for fetching the users online in the last minute using zrevrangebyscore to fetch with
+* a positive infinite max value so that we're always getting the most recent users, capped with a minimum score of the
+* current timestamp minus 60,000 milliseconds.
+* */
+app.use(function(req, res, next){
+    var min = 60 * 1000;
+    var ago = Date.now() - min;
+    db.zrevrangebyscore('online', '+inf', ago, function(err, users){
+        if (err) return next(err);
+        req.online = users;
+        next();
+    });
+});
+
 
 app.use('/', routes);
 app.use('/users', users);

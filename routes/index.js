@@ -3,7 +3,8 @@ var router = express.Router();
 
 /* GET home page. */
 router.get('/', function(req, res) {
-  res.render('index', { title: 'Express' });
+  var online_count = req.online.length;
+  res.render('index', { title: 'Express', online: online_count });
 });
 
 module.exports = router;
